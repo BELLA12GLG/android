@@ -1,0 +1,57 @@
+name: Android CI & Build
+
+# 触发条件
+on:
+  push:
+    branches: [ "main", "master" ]  # 监听主分支推送到 GitHub 时触发
+    tags:
+      - 'v*'                        # 当你推送以 v 开头的标签（如 v1.0）时触发 Release 发布
+  workflow_dispatch:                 # 支持在 GitHub 网页上手动点击运行
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # 赋予工作流向你的 Release 页面上传文件的权限
+
+    steps:
+      # 1. 检出代码（已修复：自动递归拉取 amneziawg-tools 等子模块）
+      - name: 1. 检出代码
+        uses: actions/checkout@v4
+        with:
+          submodules: 'recursive' # 🌟 核心修复：防止 CMake 找不到 android.c 报错
+
+      # 2. 配置 Java 环境
+      - name: 2. 配置 Java 环境 (JDK 17)
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+          cache: 'gradle'         # 开启 Gradle 依赖缓存，后续编译能快上加快
+
+      # 3. 给 Gradle 脚本赋予执行权限
+      - name: 3. 授权 Gradle 执行权限
+        run: chmod +x ./gradlew
+
+      # 4. 编译 Debug 版 APK
+      - name: 4. 编译 Debug 版 APK
+        run: ./gradlew :tunnel:assembleDebug --stacktrace
+
+      # 5. 自动发布到 Release（真正的手机下载圣地）
+      # 说明：只有当你推送 tag (比如打个标签 v1.0) 时，这一步才会创建发布页面。
+      - name: 5. 自动发布到 Release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: tunnel/build/outputs/apk/debug/*.apk
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # 6. 备用下载圣地：作为 Artifacts 存档
+      # 说明：平时普通 push 代码不打 tag 时，APK 会变成 Actions 页面底部的可下载附件。
+      - name: 6. 自动上传到 Artifacts (日常备份)
+        if: "!startsWith(github.ref, 'refs/tags/')"
+        uses: actions/upload-artifact@v4
+        with:
+          name: Tunnel-Debug-APK
+          path: tunnel/build/outputs/apk/debug/*.apk
