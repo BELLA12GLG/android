@@ -1,0 +1,54 @@
+name: Build Android App
+
+on:
+  push:
+    branches: [ master, main ]
+  pull_request:
+    branches: [ master, main ]
+  workflow_dispatch:    # 支持手动触发
+
+jobs:
+  build:
+    name: Build APK
+    runs-on: ubuntu-24.04
+
+    steps:
+      # ============================================================
+      # Step 1: 检出代码（含子模块）
+      # ============================================================
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive   # 🔑 递归拉取所有子模块
+          fetch-depth: 1
+
+      # ============================================================
+      # Step 2: 设置 JDK 17
+      # ============================================================
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+          cache: gradle           # 开启 Gradle 缓存加速
+
+      # ============================================================
+      # Step 3: 赋予 gradlew 执行权限
+      # ============================================================
+      - name: Grant execute permission for gradlew
+        run: chmod +x ./gradlew
+
+      # ============================================================
+      # Step 4: 构建 Debug APK
+      # ============================================================
+      - name: Build with Gradle
+        run: ./gradlew assembleDebug
+
+      # ============================================================
+      # Step 5: 上传 APK 作为构建产物（可选）
+      # ============================================================
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-debug
+          path: app/build/outputs/apk/**/*.apk
